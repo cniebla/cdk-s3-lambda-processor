@@ -1,0 +1,26 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/app.ts",
+  "watch": {
+    "include": ["**"],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "package*.json",
+      "tsconfig.json",
+      "yarn.lock",
+      "node_modules",
+      "test",
+      "cdk.out"
+    ]
+  },
+  "context": {
+    "region": "us-west-2",
+    "@aws-cdk/aws-lambda-nodejs:useLatestRuntimeVersion": true,
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+    "@aws-cdk/core:enablePartitionLiterals": true,
+    "@aws-cdk/core:target-partitions": ["aws"],
+    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
+    "@aws-cdk/aws-s3:autoDeleteObjectsPolicy": true,
+    "@aws-cdk/core:validateSnapshotRemovalPolicy": true
+  }
+}

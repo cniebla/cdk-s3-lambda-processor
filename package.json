@@ -1,0 +1,39 @@
+{
+  "name": "cdk-s3-lambda-processor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-contained AWS CDK demo: S3 incoming/ images invoke Lambda to write metadata JSON sidecars under processed/.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "tsc --noEmit && jest",
+    "cdk": "bash scripts/cdk.sh",
+    "synth": "bash scripts/cdk.sh synth",
+    "deploy": "bash scripts/cdk.sh deploy",
+    "destroy": "bash scripts/destroy.sh"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1127.0",
+    "aws-cdk-lib": "^2.268.0",
+    "constructs": "^10.8.1",
+    "exifreader": "^4.44.1"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.163",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.18.0",
+    "aws-cdk": "^2.1140.0",
+    "esbuild": "^0.25.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.8.3"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "exifreader@4.44.1": true
+  }
+}
