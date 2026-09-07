@@ -27,34 +27,13 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function resolveSize(
-  record: S3EventRecord,
-  bucket: string,
-  key: string,
-  store: ObjectStore,
-): Promise<{ size?: number; contentType?: string; etag?: string; notes: string[] }> {
-  const notes: string[] = [];
+/** S3 ObjectCreated notifications include size. Do not HeadObject; the role is GetObject only. */
+function eventObjectSize(record: S3EventRecord): number | undefined {
   const eventSize = record.s3.object.size;
   if (typeof eventSize === "number" && Number.isFinite(eventSize) && eventSize >= 0) {
-    return { size: eventSize, etag: record.s3.object.eTag, notes };
+    return eventSize;
   }
-
-  try {
-    const head = await store.headObject(bucket, key);
-    if (typeof head.contentLength === "number") {
-      return {
-        size: head.contentLength,
-        contentType: head.contentType,
-        etag: head.etag ?? record.s3.object.eTag,
-        notes,
-      };
-    }
-    notes.push("Object size was missing from the event and HeadObject.");
-    return { contentType: head.contentType, etag: head.etag, notes };
-  } catch (error) {
-    notes.push(`Could not determine object size: ${errorMessage(error)}`);
-    return { etag: record.s3.object.eTag, notes };
-  }
+  return undefined;
 }
 
 export async function processRecord(
@@ -126,13 +105,12 @@ export async function processRecord(
   };
 
   try {
-    const resolved = await resolveSize(record, bucket, key, store);
+    const eventSize = eventObjectSize(record);
 
-    if (resolved.size === undefined) {
+    if (eventSize === undefined) {
       await writeSidecar("error", {
         notes: [
-          ...resolved.notes,
-          "Refusing to download an object of unknown size.",
+          "S3 event did not include object size; refusing to download. ObjectCreated notifications include size.",
         ],
       });
       log({
@@ -146,13 +124,12 @@ export async function processRecord(
       return;
     }
 
-    if (resolved.size > MAX_OBJECT_BYTES) {
+    if (eventSize > MAX_OBJECT_BYTES) {
       await writeSidecar("too_large", {
-        size: resolved.size,
-        contentType: resolved.contentType,
-        etag: normalizeEtag(resolved.etag ?? record.s3.object.eTag),
+        size: eventSize,
+        etag: normalizeEtag(record.s3.object.eTag),
         notes: [
-          `Object size ${resolved.size} bytes exceeds the ${MAX_OBJECT_BYTES} byte limit; the object was not downloaded or hashed.`,
+          `Object size ${eventSize} bytes exceeds the ${MAX_OBJECT_BYTES} byte limit; the object was not downloaded or hashed.`,
         ],
       });
       log({
@@ -161,7 +138,7 @@ export async function processRecord(
         key,
         processedKey,
         outcome: "too_large",
-        size: resolved.size,
+        size: eventSize,
       });
       return;
     }
@@ -169,8 +146,8 @@ export async function processRecord(
     const stored = await store.getObject(bucket, key);
     const body = stored.body;
     const size = stored.contentLength ?? body.length;
-    const contentType = stored.contentType ?? resolved.contentType;
-    const etag = normalizeEtag(stored.etag ?? resolved.etag ?? record.s3.object.eTag);
+    const contentType = stored.contentType;
+    const etag = normalizeEtag(stored.etag ?? record.s3.object.eTag);
 
     if (body.length > MAX_OBJECT_BYTES) {
       await writeSidecar("too_large", {

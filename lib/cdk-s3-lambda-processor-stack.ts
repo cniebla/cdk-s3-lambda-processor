@@ -74,8 +74,10 @@ export class CdkS3LambdaProcessorStack extends Stack {
       bundling: {
         minify: true,
         sourceMap: true,
-        target: "node20",
+        target: "node24",
         format: OutputFormat.CJS,
+        // Node 18+ runtimes already include AWS SDK v3; do not copy it into the zip.
+        externalModules: ["@aws-sdk/*"],
       },
     });
 

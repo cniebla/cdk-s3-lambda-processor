@@ -137,7 +137,7 @@ Do not destroy the account-level `CDKToolkit` bootstrap stack unless you intend 
 2. Keep writing sidecars under `processed/` only. Do not add writes under `incoming/`.
 3. Run `npm test`, then `npm run deploy`.
 
-`NodejsFunction` bundles TypeScript with esbuild. Dependencies stay minimal: `@aws-sdk/client-s3` (runtime-provided, marked external) and `exifreader` (pure JS). Dimensions come from a small header parser in `src/metadata.ts`. No Sharp, ImageMagick, or native layers.
+`NodejsFunction` bundles TypeScript with esbuild targeting Node.js 24. `bundling.externalModules` is `@aws-sdk/*` so the zip uses the runtime-provided SDK rather than shipping a copy. Remaining handler dependency: `exifreader` (pure JS). Dimensions come from a small header parser in `src/metadata.ts`. No Sharp, ImageMagick, or native layers. The function does not call `HeadObject`; size comes from the S3 event, matching IAM `s3:GetObject` on `incoming/*` and `s3:PutObject` on `processed/*`.
 
 ## Layout
 

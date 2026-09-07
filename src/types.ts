@@ -36,14 +36,7 @@ export interface StoredObject {
   etag?: string;
 }
 
-export interface ObjectHead {
-  contentType?: string;
-  contentLength?: number;
-  etag?: string;
-}
-
 export interface ObjectStore {
-  headObject(bucket: string, key: string): Promise<ObjectHead>;
   getObject(bucket: string, key: string): Promise<StoredObject>;
   putJson(bucket: string, key: string, body: unknown): Promise<void>;
 }

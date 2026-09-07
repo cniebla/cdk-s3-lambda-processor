@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { CdkS3LambdaProcessorStack } from "../lib/cdk-s3-lambda-processor-stack";
@@ -132,6 +135,7 @@ describe("CdkS3LambdaProcessor stack", () => {
     expect(policies).toContain("incoming/*");
     expect(policies).toContain("s3:PutObject");
     expect(policies).toContain("processed/*");
+    expect(policies).not.toContain("s3:HeadObject");
     expect(policies).not.toContain("s3:DeleteObject");
     expect(policies).not.toContain("s3:*");
   });
@@ -169,5 +173,29 @@ describe("CdkS3LambdaProcessor stack", () => {
         "Environment=demo",
       ]),
     );
+  });
+
+  test("Lambda bundle requires the runtime AWS SDK instead of shipping a copy", () => {
+    const outdir = fs.mkdtempSync(path.join(os.tmpdir(), "cdk-s3-lambda-processor-"));
+    const app = new App({ outdir });
+    new CdkS3LambdaProcessorStack(app, "CdkS3LambdaProcessor", {
+      env: { account: "123456789012", region: TEST_REGION },
+    });
+    app.synth();
+
+    const indexes = fs
+      .readdirSync(outdir)
+      .filter((name) => name.startsWith("asset."))
+      .map((name) => path.join(outdir, name, "index.js"))
+      .filter((file) => fs.existsSync(file));
+    const processorBundle = indexes.find((file) =>
+      fs.readFileSync(file, "utf8").includes("incoming/"),
+    );
+    expect(processorBundle).toBeDefined();
+
+    const source = fs.readFileSync(processorBundle!, "utf8");
+    expect(source).toMatch(/require\(["']@aws-sdk\/client-s3["']\)/);
+    expect(source).not.toMatch(/@aws-sdk\/middleware-sdk-s3/);
+    expect(source).not.toMatch(/class GetObjectCommand/);
   });
 });

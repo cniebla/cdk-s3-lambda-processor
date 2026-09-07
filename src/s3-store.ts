@@ -1,24 +1,8 @@
-import {
-  GetObjectCommand,
-  HeadObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
-import type { ObjectHead, ObjectStore, StoredObject } from "./types";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import type { ObjectStore, StoredObject } from "./types";
 
 export function createS3ObjectStore(client: S3Client = new S3Client({})): ObjectStore {
   return {
-    async headObject(bucket: string, key: string): Promise<ObjectHead> {
-      const response = await client.send(
-        new HeadObjectCommand({ Bucket: bucket, Key: key }),
-      );
-      return {
-        contentType: response.ContentType,
-        contentLength: response.ContentLength,
-        etag: response.ETag,
-      };
-    },
-
     async getObject(bucket: string, key: string): Promise<StoredObject> {
       const response = await client.send(
         new GetObjectCommand({ Bucket: bucket, Key: key }),

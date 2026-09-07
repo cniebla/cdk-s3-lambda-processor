@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { S3Event, S3EventRecord } from "aws-lambda";
 import { handleS3Event } from "../src/handler";
 import { MAX_OBJECT_BYTES } from "../src/constants";
-import type { ObjectHead, ObjectStore, ProcessedSidecar, StoredObject } from "../src/types";
+import type { ObjectStore, ProcessedSidecar, StoredObject } from "../src/types";
 
 const PNG_1X1 = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
@@ -13,20 +13,6 @@ class MockStore implements ObjectStore {
   objects = new Map<string, StoredObject>();
   puts: { bucket: string; key: string; body: ProcessedSidecar }[] = [];
   getCalls: string[] = [];
-  headCalls: string[] = [];
-
-  async headObject(bucket: string, key: string): Promise<ObjectHead> {
-    this.headCalls.push(`${bucket}/${key}`);
-    const obj = this.objects.get(`${bucket}/${key}`);
-    if (!obj) {
-      throw new Error("NotFound");
-    }
-    return {
-      contentType: obj.contentType,
-      contentLength: obj.contentLength ?? obj.body.length,
-      etag: obj.etag,
-    };
-  }
 
   async getObject(bucket: string, key: string): Promise<StoredObject> {
     this.getCalls.push(`${bucket}/${key}`);
@@ -212,6 +198,24 @@ describe("handler", () => {
     expect(store.getCalls).toEqual(["demo-bucket/incoming/my photo.png"]);
     expect(store.puts[0]?.key).toBe("processed/my photo.png.json");
     expect(store.puts[0]?.body.key).toBe("incoming/my photo.png");
+  });
+
+  test("refuses to download when the S3 event omits object size", async () => {
+    const store = new MockStore();
+    store.objects.set("demo-bucket/incoming/sunset.png", {
+      body: PNG_1X1,
+      contentType: "image/png",
+      contentLength: PNG_1X1.length,
+    });
+    const rec = s3Record({ key: "incoming/sunset.png" });
+    delete (rec.s3.object as { size?: number }).size;
+
+    await handleS3Event(eventOf(rec), context, store);
+
+    expect(store.getCalls).toEqual([]);
+    expect(store.puts[0]?.key).toBe("processed/sunset.png.json");
+    expect(store.puts[0]?.body.outcome).toBe("error");
+    expect(store.puts[0]?.body.notes.join(" ")).toMatch(/did not include object size/i);
   });
 
   test("writes an error sidecar when GetObject fails and still succeeds", async () => {
