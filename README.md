@@ -41,6 +41,7 @@ This demo runs in **your** AWS account. You pay for S3 requests and storage, Lam
 - Objects under `incoming/` and `processed/` expire after **7 days**.
 - Logs retain for **7 days**.
 - The bucket uses `RemovalPolicy.DESTROY` and auto-delete objects, so `npm run destroy` can empty it and remove the stack.
+- `npm run destroy` also deletes leftover CloudWatch log groups from CDK custom-resource Lambdas and, if nothing else is using the region, the CDK bootstrap stack and its retained staging bucket.
 
 Do not leave the stack running unused. Deploy, try the sample, then destroy.
 
@@ -67,7 +68,7 @@ The demo bucket name includes the region: `cdk-s3-lambda-processor-<account-id>-
 
 - Node.js 20+
 - AWS CDK v2 (this repo installs the CLI locally; `npm run cdk` / `npx cdk`)
-- AWS credentials with permission to deploy CloudFormation, S3, Lambda, IAM, and Logs
+- AWS credentials with permission to deploy CloudFormation, S3, Lambda, IAM, Logs, and (for bootstrap teardown) ECR
 - An explicit region, as above
 
 ## Bootstrap
@@ -127,9 +128,24 @@ The sidecar includes at least `bucket`, `key`, `size`, `contentType`, `etag`, `s
 npm run destroy
 ```
 
-That script targets `CdkS3LambdaProcessor` in `CDK_DEPLOY_REGION` (or `cdk.json` `context.region`). It passes `--force`, empties the demo bucket (including leftover `incoming/` and `processed/` objects), then deletes the stack. If the CDK CLI watcher times out, the script keeps polling CloudFormation until the stack is gone.
+That script targets `CdkS3LambdaProcessor` in `CDK_DEPLOY_REGION` (or `cdk.json` `context.region`). It is safe to re-run after a previous destroy. It:
 
-Do not destroy the account-level `CDKToolkit` bootstrap stack unless you intend to remove CDK tooling for that region.
+1. Passes `--force`, empties the demo bucket (including leftover `incoming/` and `processed/` objects), and deletes the stack. If the CDK CLI watcher times out, it keeps polling CloudFormation until the stack is gone.
+2. Deletes leftover CloudWatch log groups named `/aws/lambda/CdkS3LambdaProcessor*`. CDK custom-resource Lambdas (S3 notifications and auto-delete objects) create those groups outside CloudFormation, so stack deletion alone leaves them behind.
+3. Removes unused CDK bootstrap in that region: the `CDKToolkit` stack, the retained staging bucket `cdk-hnb659fds-assets-<account>-<region>`, and the bootstrap ECR repository if it is still present.
+
+Keep bootstrap if you still use CDK in that region:
+
+```bash
+npm run destroy -- --keep-bootstrap
+# or: KEEP_BOOTSTRAP=1 npm run destroy
+```
+
+Bootstrap teardown is skipped automatically when other CloudFormation stacks still exist in the region. Re-bootstrap before the next deploy if you removed it:
+
+```bash
+npx cdk bootstrap aws://ACCOUNT_ID/$REGION
+```
 
 ## How to change the handler
 
@@ -148,7 +164,7 @@ Do not destroy the account-level `CDKToolkit` bootstrap stack unless you intend 
 | `lib/region.ts` | Explicit region resolution |
 | `src/handler.ts` | Lambda entry |
 | `src/metadata.ts` | Lightweight image metadata (no transform) |
-| `scripts/destroy.sh` | Empty the demo bucket and delete the stack |
+| `scripts/destroy.sh` | Delete the stack, leftover log groups, and unused CDK bootstrap |
 | `test/` | Handler unit tests (mock S3) and CDK assertions |
 | `samples/sunset.png` | Small real PNG fixture |
 
@@ -158,4 +174,4 @@ GitHub Actions runs `npm ci`, `npm test`, and `npx cdk synth` on push and pull r
 
 ## Self-contained
 
-Everything this project creates lives in one stack, `CdkS3LambdaProcessor`. It is meant to be deployed into an empty area of an account and removed with `npm run destroy`. Do not wire it to other account resources.
+Everything this project creates lives in one stack, `CdkS3LambdaProcessor`, plus the usual per-region CDK bootstrap (`CDKToolkit` and its staging bucket) if that region was not already bootstrapped. It is meant to be deployed into an empty area of an account and removed with `npm run destroy`. Do not wire it to other account resources.
